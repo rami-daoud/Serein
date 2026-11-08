@@ -888,6 +888,62 @@ impl Voice {
 			),
 		}
 	}
+	/// Local automation (not upstream): watch `<data_dir>/cycle-trigger` for
+	/// device-switch requests from the Streamfog cycle. The file contains one
+	/// word, `streaming` or `normal`; it is consumed (deleted) on read and the
+	/// selection is written exactly like the settings dropdown would. The
+	/// existing per-poll device diff then hot-applies and persists it.
+	fn drain_cycle_trigger(ui: &mut ui::MessagingUi, ctx: &egui::Context) {
+		use std::sync::OnceLock;
+		static TRIGGER: OnceLock<std::sync::Mutex<std::sync::mpsc::Receiver<String>>> =
+			OnceLock::new();
+		let rx = TRIGGER
+			.get_or_init(|| {
+				let (tx, rx) = std::sync::mpsc::channel();
+				let ctx = ctx.clone();
+				std::thread::spawn(move || loop {
+					std::thread::sleep(std::time::Duration::from_millis(300));
+					let Some(root) = local_store::data_dir().ok() else {
+						continue;
+					};
+					let path = root.join("cycle-trigger");
+					let Ok(text) = std::fs::read_to_string(&path) else {
+						continue;
+					};
+					let mode = text.trim().to_string();
+					if matches!(mode.as_str(), "streaming" | "normal") {
+						let _ = std::fs::remove_file(&path);
+						let _ = tx.send(mode);
+						// The idle frame loop sleeps; wake it so the queued
+						// switch applies within a frame instead of waiting
+						// for the next user interaction.
+						ctx.request_repaint();
+					}
+				});
+				std::sync::Mutex::new(rx)
+			})
+			.lock()
+			.unwrap_or_else(|poisoned| poisoned.into_inner());
+		while let Ok(mode) = rx.try_recv() {
+			match mode.as_str() {
+				"streaming" => {
+					ui.voice_input = Some("coreaudio:BlackHole2ch_UID".to_owned());
+					ui.voice_output = Some("coreaudio:BlackHole16ch_UID".to_owned());
+				}
+				"normal" => {
+					ui.voice_input = None;
+					ui.voice_output = None;
+				}
+				_ => {}
+			}
+		}
+		// Keep the idle UI loop ticking: egui sleeps without events, and the
+		// drain runs in the loop — re-arming every frame sustains a 2 Hz
+		// tick so queued switches apply within ~a frame even when Serein is
+		// untouched (verified: without this, triggers sat for minutes).
+		ctx.request_repaint_after(std::time::Duration::from_millis(500));
+	}
+
 	pub fn poll(
 		&mut self,
 		runtime: &Runtime,
@@ -896,6 +952,7 @@ impl Voice {
 		ctx: &egui::Context,
 	) -> Option<Command> {
 		self.reap();
+		Self::drain_cycle_trigger(ui, ctx);
 		if std::mem::take(&mut self.leave_cue) && ui.notification_options.allows(Sound::UserLeave) {
 			ui.notification_preview = Some(Sound::UserLeave);
 			ctx.request_repaint();
