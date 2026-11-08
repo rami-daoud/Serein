@@ -309,6 +309,7 @@ fn worker(
 ) {
 	let mut generation = 0;
 	let mut outcome = Status::Disabled;
+	let mut last_authorized: Option<(std::time::Instant, Status)> = None;
 	let mut outstanding: Option<NotificationHandle> = None;
 	loop {
 		#[cfg(not(target_os = "windows"))]
@@ -344,10 +345,22 @@ fn worker(
 			generation = active;
 			outcome = if generation & 1 == 0 {
 				Status::Disabled
-			} else if !was_enabled
-				|| status.load(Ordering::Acquire) == encoded(generation, Status::Enabling)
-			{
-				authorize()
+			} else if !was_enabled {
+				let result = authorize();
+				last_authorized = Some((std::time::Instant::now(), result));
+				result
+			} else if status.load(Ordering::Acquire) == encoded(generation, Status::Enabling) {
+				// The generation bump that lands during the slow OS call drops its
+				// result and leaves Enabling stuck; re-requesting on every bump ran
+				// authorization at ~22/s. Reuse a recent result instead.
+				match last_authorized {
+					Some((at, prior)) if at.elapsed() < std::time::Duration::from_secs(10) => prior,
+					_ => {
+						let result = authorize();
+						last_authorized = Some((std::time::Instant::now(), result));
+						result
+					}
+				}
 			} else {
 				outcome
 			};
