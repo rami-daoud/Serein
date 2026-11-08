@@ -2223,6 +2223,26 @@ impl ExtensionUi {
 			self.status = "Result discarded because the conversation or draft changed.".into();
 			return None;
 		}
+		// Local automation patch (not intended for upstream): proposals that
+		// only select audio devices apply without the confirmation dialog so
+		// the stream cycle can switch devices unattended. Every other effect
+		// keeps the human Apply button.
+		if result.output.replacement.is_none()
+			&& matches!(
+				result.output.effects.first(),
+				Some(extensions::HostEffect::AppAction {
+					action: extensions::AppAction::SelectAudioDevices { .. }
+						| extensions::AppAction::RefreshMediaDevices,
+				})
+			) {
+			let effect = result.output.effects[0].clone();
+			self.status = "Device selection applied automatically.".into();
+			return Some(crate::extension_app::ConfirmedEffect {
+				plugin: result.id.clone(),
+				context: result.context.clone(),
+				effect,
+			});
+		}
 		let mut applied = false;
 		let mut confirmed = None;
 		let mut action = None;

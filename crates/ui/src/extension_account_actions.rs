@@ -295,17 +295,26 @@ impl MessagingUi {
 				input_id,
 				output_id,
 			} => {
+				// Empty IDs clear the selection back to the system default.
 				if let Some(value) = input_id {
-					if !self.voice_inputs.iter().any(|(id, _)| id == &value) {
-						return Err("The microphone is no longer available".into());
+					if value.is_empty() {
+						self.voice_input = None;
+					} else {
+						if !self.voice_inputs.iter().any(|(id, _)| id == &value) {
+							return Err("The microphone is no longer available".into());
+						}
+						self.voice_input = Some(value);
 					}
-					self.voice_input = Some(value);
 				}
 				if let Some(value) = output_id {
-					if !self.voice_outputs.iter().any(|(id, _)| id == &value) {
-						return Err("The speaker device is no longer available".into());
+					if value.is_empty() {
+						self.voice_output = None;
+					} else {
+						if !self.voice_outputs.iter().any(|(id, _)| id == &value) {
+							return Err("The speaker device is no longer available".into());
+						}
+						self.voice_output = Some(value);
 					}
-					self.voice_output = Some(value);
 				}
 			}
 			AppAction::RefreshMediaDevices => {

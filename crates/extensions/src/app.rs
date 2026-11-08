@@ -1878,8 +1878,12 @@ impl AppAction {
 				if input_id.is_none() && output_id.is_none() {
 					return Err(Error::Invalid);
 				}
+				// An empty ID is a local "clear to system default" sentinel;
+				// non-empty IDs are ordinary device labels.
 				for value in [input_id, output_id].into_iter().flatten() {
-					label(value, 256)?;
+					if !value.is_empty() {
+						label(value, 256)?;
+					}
 				}
 			}
 			Self::SelectCameraDevice { device_id } => {

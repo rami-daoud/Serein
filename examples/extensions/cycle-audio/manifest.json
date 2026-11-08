@@ -1,0 +1,15 @@
+{
+  "api_version": 1,
+  "id": "cycle-audio",
+  "name": "Cycle Audio",
+  "version": "1.0.0",
+  "author": "rd",
+  "license": "MIT",
+  "source": "https://github.com/rami-daoud/Serein/tree/camera-vcam-fix/examples/extensions/cycle-audio",
+  "kind": "plugin",
+  "capabilities": ["audio_settings"],
+  "actions": [
+    {"id": "streaming", "label": "Set streaming devices", "surface": "panel"},
+    {"id": "normal", "label": "Set default devices", "surface": "panel"}
+  ]
+}
