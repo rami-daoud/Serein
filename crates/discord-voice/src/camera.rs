@@ -647,11 +647,15 @@ mod macos {
 			}
 			session.addInput(&input);
 			session.addOutput(&output);
-			if !session.canSetSessionPreset(AVCaptureSessionPresetInputPriority) {
-				return Err("Camera does not support native format selection");
-			}
+			// Virtual cameras (OBS/Meld/Streamfog CMIO extensions) advertise no
+			// session presets. The input-priority preset only lets the device's
+			// own locked format govern capture (configure below); when a device
+			// does not support it, keep the default preset and capture anyway
+			// instead of rejecting the device outright.
 			session.beginConfiguration();
-			session.setSessionPreset(AVCaptureSessionPresetInputPriority);
+			if session.canSetSessionPreset(AVCaptureSessionPresetInputPriority) {
+				session.setSessionPreset(AVCaptureSessionPresetInputPriority);
+			}
 			let configured = configure(&device);
 			session.commitConfiguration();
 			configured?;
